@@ -1,4 +1,4 @@
-name: 'Random Reviewers'
+name: 'Reviewer Roulette'
 description: 'Assigns random reviewers to pull requests.'
 author: 'ihs7'
 branding:
