@@ -19,10 +19,8 @@ export async function run(): Promise<void> {
         `Input 'pull-request-number' not supplied. Unable to continue.`
       )
     }
-    let pull_number: number
-    try {
-      pull_number = parseInt(prNumber)
-    } catch (error) {
+    const pull_number: number = parseInt(prNumber)
+    if (isNaN(pull_number)) {
       throw new Error(`Invalid value for 'pull-request-number': ${prNumber}`)
     }
     if (!token) {
@@ -60,11 +58,7 @@ export async function run(): Promise<void> {
       activeUsers.add(activity.actor.login)
     }
 
-    const reviewers = Array.from(activeUsers)
-      .sort(() => Math.random() - 0.5)
-      .slice(0, parseInt(numberOfReviewers))
-
-    if (reviewers.length === 0) {
+    if (activeUsers.size === 0) {
       core.warning('Found no eligible reviewers to add.')
       return
     } else {
@@ -72,6 +66,10 @@ export async function run(): Promise<void> {
         `Found ${activeUsers.size} users who are eligible to be reviewers.`
       )
     }
+
+    const reviewers = Array.from(activeUsers)
+      .sort(() => 0.5 - Math.random())
+      .slice(0, parseInt(numberOfReviewers))
 
     if (dryRun === 'true') {
       core.info(
