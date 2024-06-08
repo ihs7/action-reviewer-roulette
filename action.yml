@@ -1,0 +1,26 @@
+name: 'Random Reviewers'
+description: 'Assigns random reviewers to pull requests.'
+author: 'ihs7'
+branding:
+  icon: 'user-plus'
+  color: 'green'
+inputs:
+  token:
+    description: 'GITHUB_TOKEN or a `repo` scoped Personal Access Token (PAT)'
+    required: true
+    default: ${{ github.token }}
+  pull-request-number:
+    description: 'Pull Request number'
+    required: true
+    default: ${{ github.event.pull_request.number }}
+  number-of-reviewers:
+    description: 'Number of random reviewers to add to PR'
+    required: true
+    default: '1'
+  dry-run:
+    description: 'Dry run mode, does everything but add reviewers to PR'
+    required: false
+    default: 'false'
+runs:
+  using: node20
+  main: dist/index.js
