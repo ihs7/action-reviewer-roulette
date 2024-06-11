@@ -29233,21 +29233,25 @@ async function run() {
         const token = core.getInput('token');
         const { owner, repo } = github.context.repo;
         const octokit = github.getOctokit(token);
-        const numberOfReviewers = core.getInput('number-of-reviewers');
-        const prNumber = core.getInput('pull-request-number');
+        const numberOfReviewersInput = core.getInput('number-of-reviewers');
+        const pullRequestNumberInput = core.getInput('pull-request-number');
         const dryRun = core.getInput('dry-run');
-        if (!prNumber) {
+        if (!pullRequestNumberInput) {
             throw new Error(`Input 'pull-request-number' not supplied. Unable to continue.`);
         }
-        const pull_number = parseInt(prNumber);
+        const pull_number = parseInt(pullRequestNumberInput);
         if (isNaN(pull_number)) {
-            throw new Error(`Invalid value for 'pull-request-number': ${prNumber}`);
+            throw new Error(`Invalid value for 'pull-request-number': ${pullRequestNumberInput}`);
         }
         if (!token) {
             throw new Error(`Input 'token' not supplied. Unable to continue.`);
         }
-        if (!numberOfReviewers) {
-            throw new Error(`Input 'numberOfReviewers' not supplied. Unable to continue.`);
+        if (!numberOfReviewersInput) {
+            throw new Error(`Input 'number-of-reviewers' not supplied. Unable to continue.`);
+        }
+        const numberOfReviewers = parseInt(numberOfReviewersInput);
+        if (isNaN(numberOfReviewers)) {
+            throw new Error(`Invalid value for 'number-of-reviewers': ${numberOfReviewersInput}`);
         }
         const { data: pr } = await octokit.rest.pulls.get({
             owner,
@@ -29257,6 +29261,7 @@ async function run() {
         if (pr == null) {
             throw new Error(`PR #${pull_number} not found.`);
         }
+        const existingReviewers = (pr.requested_reviewers || []).map(reviewer => reviewer.login);
         core.info(`Will add ${numberOfReviewers} reviewers to PR: #${pull_number}`);
         const { data: activities } = await octokit.rest.activity.listRepoEvents({
             owner,
@@ -29275,6 +29280,8 @@ async function run() {
                 continue;
             if (activity.actor.login.includes('[bot]'))
                 continue;
+            if (existingReviewers.includes(activity.actor.login))
+                continue;
             activeUsers.add(activity.actor.login);
         }
         if (activeUsers.size === 0) {
@@ -29286,7 +29293,7 @@ async function run() {
         }
         const reviewers = Array.from(activeUsers)
             .sort(() => 0.5 - Math.random())
-            .slice(0, parseInt(numberOfReviewers));
+            .slice(0, numberOfReviewers);
         if (dryRun === 'true') {
             core.info(`Dry run enabled. Skipping adding reviewers. Would've added following users as reviewers: ${reviewers.join(', ')}`);
             return;

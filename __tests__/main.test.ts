@@ -69,7 +69,7 @@ describe('action', () => {
     expect(errorMock).not.toHaveBeenCalled()
     expect(setFailedMock).toHaveBeenNthCalledWith(
       1,
-      "Input 'numberOfReviewers' not supplied. Unable to continue."
+      "Input 'number-of-reviewers' not supplied. Unable to continue."
     )
   })
 
@@ -93,6 +93,29 @@ describe('action', () => {
     expect(setFailedMock).toHaveBeenNthCalledWith(
       1,
       `Invalid value for 'pull-request-number': ${invalidPrNumber}`
+    )
+  })
+
+  it('sets failed when number-of-reviewers is invalid', async () => {
+    const invalidNumberOfReviewers = 'foo'
+    getInputMock.mockImplementation(name => {
+      switch (name) {
+        case 'number-of-reviewers':
+          return invalidNumberOfReviewers
+        case 'pull-request-number':
+          return '123'
+        case 'token':
+          return 'some-token'
+        default:
+          return ''
+      }
+    })
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(setFailedMock).toHaveBeenNthCalledWith(
+      1,
+      `Invalid value for 'number-of-reviewers': ${invalidNumberOfReviewers}`
     )
   })
 
@@ -324,6 +347,60 @@ describe('action', () => {
     expect(infoMock).toHaveBeenNthCalledWith(
       2,
       'Found 3 users who are eligible to be reviewers.'
+    )
+    expect(infoMock).toHaveBeenNthCalledWith(
+      3,
+      `Adding following users as reviewers: ${reviewerLoginToAdd}`
+    )
+  })
+
+  it('should not add existing reviewer', async () => {
+    getInputMock.mockImplementation(name => {
+      switch (name) {
+        case 'number-of-reviewers':
+          return '1'
+        case 'pull-request-number':
+          return '123'
+        case 'token':
+          return 'some-token'
+        default:
+          return ''
+      }
+    })
+    const reviewerLoginToAdd = 'other'
+    const existingReviewer = 'existing'
+    const prRaiser = 'any'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getOctokitMock.mockImplementation((): any => {
+      return {
+        rest: {
+          activity: {
+            listRepoEvents: jest.fn().mockResolvedValue({
+              data: [
+                { actor: { login: reviewerLoginToAdd } },
+                { actor: { login: existingReviewer } },
+                { actor: { login: prRaiser } }
+              ]
+            })
+          },
+          pulls: {
+            get: jest.fn().mockResolvedValue({
+              data: {
+                user: { login: prRaiser },
+                requested_reviewers: [{ login: existingReviewer }]
+              }
+            })
+          }
+        }
+      }
+    })
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(infoMock).toHaveBeenNthCalledWith(
+      2,
+      'Found 1 users who are eligible to be reviewers.'
     )
     expect(infoMock).toHaveBeenNthCalledWith(
       3,
