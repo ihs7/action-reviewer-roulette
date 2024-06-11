@@ -8,7 +8,9 @@
 
 This GitHub Action automatically assigns a specified number of random reviewers
 to a pull request. It fetches events for the repository to identify active users
-and assigns them as reviewers to the PR.
+and adds them as reviewers to the PR.
+
+![Reviewers added](./img/add_reviewer_example.png)
 
 ## Usage
 
@@ -30,7 +32,7 @@ jobs:
       - name: Assign random reviewers to PR
         uses: ihs7/action-reviewer-roulette@v1
         with:
-          number-of-reviewers: '2'
+          number-of-reviewers: 2
 ```
 
 ### Using with peter-evans/create-pull-request
@@ -48,7 +50,7 @@ reviewers to the pull request created.
   uses: ihs7/action-reviewer-roulette@v1
   if: ${{ steps.cpr.outputs.pull-request-number }}
   with:
-    number-of-reviewers: '2'
+    number-of-reviewers: 2
     pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
 ```
 
