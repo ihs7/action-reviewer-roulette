@@ -12,6 +12,7 @@ export async function run(): Promise<void> {
     const octokit = github.getOctokit(token)
     const numberOfReviewersInput = core.getInput('number-of-reviewers')
     const pullRequestNumberInput = core.getInput('pull-request-number')
+    const excludedReviewersInput = core.getInput('excluded-reviewers')
     const dryRun = core.getInput('dry-run')
 
     if (!pullRequestNumberInput) {
@@ -38,6 +39,12 @@ export async function run(): Promise<void> {
       throw new Error(
         `Invalid value for 'number-of-reviewers': ${numberOfReviewersInput}`
       )
+    }
+    let excludedReviewersList: string[] = []
+    if (excludedReviewersInput.length > 0) {
+      excludedReviewersList = excludedReviewersInput
+        .split(',')
+        .map(s => s.trim())
     }
     const { data: pr } = await octokit.rest.pulls.get({
       owner,
@@ -68,6 +75,7 @@ export async function run(): Promise<void> {
       if (activity.actor.login === pr.user.login) continue
       if (activity.actor.login.includes('[bot]')) continue
       if (existingReviewers.includes(activity.actor.login)) continue
+      if (excludedReviewersList.includes(activity.actor.login)) continue
       activeUsers.add(activity.actor.login)
     }
 

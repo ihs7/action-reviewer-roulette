@@ -29235,6 +29235,7 @@ async function run() {
         const octokit = github.getOctokit(token);
         const numberOfReviewersInput = core.getInput('number-of-reviewers');
         const pullRequestNumberInput = core.getInput('pull-request-number');
+        const excludedReviewersInput = core.getInput('excluded-reviewers');
         const dryRun = core.getInput('dry-run');
         if (!pullRequestNumberInput) {
             throw new Error(`Input 'pull-request-number' not supplied. Unable to continue.`);
@@ -29252,6 +29253,12 @@ async function run() {
         const numberOfReviewers = parseInt(numberOfReviewersInput);
         if (isNaN(numberOfReviewers)) {
             throw new Error(`Invalid value for 'number-of-reviewers': ${numberOfReviewersInput}`);
+        }
+        let excludedReviewersList = [];
+        if (excludedReviewersInput.length > 0) {
+            excludedReviewersList = excludedReviewersInput
+                .split(',')
+                .map(s => s.trim());
         }
         const { data: pr } = await octokit.rest.pulls.get({
             owner,
@@ -29281,6 +29288,8 @@ async function run() {
             if (activity.actor.login.includes('[bot]'))
                 continue;
             if (existingReviewers.includes(activity.actor.login))
+                continue;
+            if (excludedReviewersList.includes(activity.actor.login))
                 continue;
             activeUsers.add(activity.actor.login);
         }

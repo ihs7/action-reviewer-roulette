@@ -39,7 +39,7 @@ jobs:
 
 If you are using
 [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)
-to create pull requests, you can use this action to subsequently adding random
+to create pull requests, you can use this action to subsequently add random
 reviewers to the pull request created.
 
 ```yml
@@ -64,7 +64,21 @@ All inputs are **optional**. If not set, sensible defaults will be used.
 | `token` | `GITHUB_TOKEN` (permissions `contents: write` and `pull-requests: write`) or a `repo` scoped [Personal Access Token (PAT)](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token). | `GITHUB_TOKEN` |
 | `pull-request-number` | The number of the pull request to assign reviewers. | `${{ github.event.pull_request.number }}` |
 | `number-of-reviewers` | The number of reviewers add to the PR | `1` |
+| `excluded-reviewers` | Comma separated list of GitHub usernames to exclude from the random selection | `""` |
 | `dry-run` | Useful when testing the action, does everything but add reviewers to PR | `false` |
+
+### Excluding users from the random selection
+
+You can exclude users from the random selection by providing a comma-separated
+list of GitHub usernames in the `excluded-reviewers` input.
+
+```yml
+- name: Assign random reviewers to PR
+  uses: ihs7/action-reviewer-roulette@v1
+  with:
+    number-of-reviewers: 2
+    excluded-reviewers: 'happyhut,virtualhorse,howpufferfish'
+```
 
 ## Workflow permissions
 
