@@ -304,6 +304,57 @@ describe('action', () => {
     )
   })
 
+  it('should not pick excluded reviewers', async () => {
+    getInputMock.mockImplementation(name => {
+      switch (name) {
+        case 'number-of-reviewers':
+          return '1'
+        case 'pull-request-number':
+          return '123'
+        case 'token':
+          return 'some-token'
+        case 'excluded-reviewers':
+          return 'excluded'
+        default:
+          return ''
+      }
+    })
+    const reviewerLoginToAdd = 'other'
+    const excludedReviewer = 'excluded'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getOctokitMock.mockImplementation((): any => {
+      return {
+        rest: {
+          activity: {
+            listRepoEvents: jest.fn().mockResolvedValue({
+              data: [
+                { actor: { login: reviewerLoginToAdd } },
+                { actor: { login: excludedReviewer } }
+              ]
+            })
+          },
+          pulls: {
+            get: jest
+              .fn()
+              .mockResolvedValue({ data: { user: { login: 'any' } } })
+          }
+        }
+      }
+    })
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(infoMock).toHaveBeenNthCalledWith(
+      2,
+      'Found 1 users who are eligible to be reviewers.'
+    )
+    expect(infoMock).toHaveBeenNthCalledWith(
+      3,
+      `Adding following users as reviewers: ${reviewerLoginToAdd}`
+    )
+  })
+
   it('should pick random reviewers', async () => {
     getInputMock.mockImplementation(name => {
       switch (name) {
