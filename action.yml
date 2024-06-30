@@ -17,6 +17,10 @@ inputs:
     description: 'Number of random reviewers to add to PR'
     required: true
     default: '1'
+  max-number-of-reviewers:
+    description: 'Maximum number of reviewers on the PR'
+    required: false
+    default: ''
   excluded-reviewers:
     description: 'Comma separated list of usernames to exclude from the draw'
     required: false

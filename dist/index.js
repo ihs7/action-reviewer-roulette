@@ -29234,6 +29234,7 @@ async function run() {
         const { owner, repo } = github.context.repo;
         const octokit = github.getOctokit(token);
         const numberOfReviewersInput = core.getInput('number-of-reviewers');
+        const maxNumberOfReviewersInput = core.getInput('max-number-of-reviewers');
         const pullRequestNumberInput = core.getInput('pull-request-number');
         const excludedReviewersInput = core.getInput('excluded-reviewers');
         const dryRun = core.getInput('dry-run');
@@ -29254,6 +29255,13 @@ async function run() {
         if (isNaN(numberOfReviewers)) {
             throw new Error(`Invalid value for 'number-of-reviewers': ${numberOfReviewersInput}`);
         }
+        let maxNumberOfReviewers = Infinity;
+        if (maxNumberOfReviewersInput) {
+            maxNumberOfReviewers = parseInt(maxNumberOfReviewersInput);
+            if (isNaN(maxNumberOfReviewers)) {
+                throw new Error(`Invalid value for 'max-number-of-reviewers': ${maxNumberOfReviewersInput}`);
+            }
+        }
         let excludedReviewersList = [];
         if (excludedReviewersInput.length > 0) {
             excludedReviewersList = excludedReviewersInput
@@ -29269,7 +29277,12 @@ async function run() {
             throw new Error(`PR #${pull_number} not found.`);
         }
         const existingReviewers = (pr.requested_reviewers || []).map(reviewer => reviewer.login);
-        core.info(`Will add ${numberOfReviewers} reviewers to PR: #${pull_number}`);
+        if (existingReviewers.length >= maxNumberOfReviewers) {
+            core.info(`PR #${pull_number} already has ${existingReviewers.length} reviewers. ${maxNumberOfReviewers} reviewer(s) is the maximum. Not adding more reviewers.`);
+            return;
+        }
+        const numberOfReviewersToAdd = Math.min(numberOfReviewers, maxNumberOfReviewers - existingReviewers.length);
+        core.info(`Will add ${numberOfReviewersToAdd} reviewers to PR: #${pull_number}`);
         const { data: activities } = await octokit.rest.activity.listRepoEvents({
             owner,
             repo,
@@ -29302,7 +29315,7 @@ async function run() {
         }
         const reviewers = Array.from(activeUsers)
             .sort(() => 0.5 - Math.random())
-            .slice(0, numberOfReviewers);
+            .slice(0, numberOfReviewersToAdd);
         if (dryRun === 'true') {
             core.info(`Dry run enabled. Skipping adding reviewers. Would've added following users as reviewers: ${reviewers.join(', ')}`);
             return;

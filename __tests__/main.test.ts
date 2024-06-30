@@ -96,6 +96,31 @@ describe('action', () => {
     )
   })
 
+  it('sets failed when max-number-of-reviewers is invalid', async () => {
+    const invalidMaxNumberOfReviewers = 'foo'
+    getInputMock.mockImplementation(name => {
+      switch (name) {
+        case 'number-of-reviewers':
+          return '5'
+        case 'pull-request-number':
+          return '123'
+        case 'token':
+          return 'some-token'
+        case 'max-number-of-reviewers':
+          return invalidMaxNumberOfReviewers
+        default:
+          return ''
+      }
+    })
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(setFailedMock).toHaveBeenNthCalledWith(
+      1,
+      `Invalid value for 'max-number-of-reviewers': ${invalidMaxNumberOfReviewers}`
+    )
+  })
+
   it('sets failed when number-of-reviewers is invalid', async () => {
     const invalidNumberOfReviewers = 'foo'
     getInputMock.mockImplementation(name => {
@@ -449,6 +474,122 @@ describe('action', () => {
     await main.run()
     expect(runMock).toHaveReturned()
     expect(errorMock).not.toHaveBeenCalled()
+    expect(infoMock).toHaveBeenNthCalledWith(
+      2,
+      'Found 1 users who are eligible to be reviewers.'
+    )
+    expect(infoMock).toHaveBeenNthCalledWith(
+      3,
+      `Adding following users as reviewers: ${reviewerLoginToAdd}`
+    )
+  })
+
+  it('should not add more reviewers if max-number-of-reviewers is reached', async () => {
+    const prNumber = '123'
+    const maxNumberOfReviewers = 1
+    getInputMock.mockImplementation(name => {
+      switch (name) {
+        case 'number-of-reviewers':
+          return '1'
+        case 'pull-request-number':
+          return prNumber
+        case 'token':
+          return 'some-token'
+        case 'max-number-of-reviewers':
+          return maxNumberOfReviewers.toString()
+        default:
+          return ''
+      }
+    })
+    const reviewerLoginToAdd = 'other'
+    const existingReviewer = 'existing'
+    const prRaiser = 'any'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getOctokitMock.mockImplementation((): any => {
+      return {
+        rest: {
+          activity: {
+            listRepoEvents: jest.fn().mockResolvedValue({
+              data: [
+                { actor: { login: reviewerLoginToAdd } },
+                { actor: { login: existingReviewer } },
+                { actor: { login: prRaiser } }
+              ]
+            })
+          },
+          pulls: {
+            get: jest.fn().mockResolvedValue({
+              data: {
+                user: { login: prRaiser },
+                requested_reviewers: [{ login: existingReviewer }]
+              }
+            })
+          }
+        }
+      }
+    })
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(infoMock).toHaveBeenNthCalledWith(
+      1,
+      `PR #${prNumber} already has 1 reviewers. ${maxNumberOfReviewers} reviewer(s) is the maximum. Not adding more reviewers.`
+    )
+  })
+
+  it('should add reviewers until max-number-of-reviewers is reached', async () => {
+    const prNumber = '123'
+    const maxNumberOfReviewers = 2
+    getInputMock.mockImplementation(name => {
+      switch (name) {
+        case 'number-of-reviewers':
+          return '2'
+        case 'pull-request-number':
+          return prNumber
+        case 'token':
+          return 'some-token'
+        case 'max-number-of-reviewers':
+          return maxNumberOfReviewers.toString()
+        default:
+          return ''
+      }
+    })
+    const reviewerLoginToAdd = 'other'
+    const existingReviewer = 'existing'
+    const prRaiser = 'any'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getOctokitMock.mockImplementation((): any => {
+      return {
+        rest: {
+          activity: {
+            listRepoEvents: jest.fn().mockResolvedValue({
+              data: [
+                { actor: { login: reviewerLoginToAdd } },
+                { actor: { login: existingReviewer } },
+                { actor: { login: prRaiser } }
+              ]
+            })
+          },
+          pulls: {
+            get: jest.fn().mockResolvedValue({
+              data: {
+                user: { login: prRaiser },
+                requested_reviewers: [{ login: existingReviewer }]
+              }
+            })
+          }
+        }
+      }
+    })
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(infoMock).toHaveBeenNthCalledWith(
+      1,
+      `Will add 1 reviewers to PR: #${prNumber}`
+    )
     expect(infoMock).toHaveBeenNthCalledWith(
       2,
       'Found 1 users who are eligible to be reviewers.'

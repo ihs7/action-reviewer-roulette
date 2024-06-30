@@ -20,6 +20,6 @@ jobs:
   actions-tagger:
     runs-on: ubuntu-latest
     steps:
-      - uses: Actions-R-Us/actions-tagger@v2
+      - uses: Actions-R-Us/actions-tagger@v2.1.0-rc5
         with:
           publish_latest_tag: true
