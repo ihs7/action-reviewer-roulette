@@ -11,6 +11,7 @@ export async function run(): Promise<void> {
     const { owner, repo } = github.context.repo
     const octokit = github.getOctokit(token)
     const numberOfReviewersInput = core.getInput('number-of-reviewers')
+    const maxNumberOfReviewersInput = core.getInput('max-number-of-reviewers')
     const pullRequestNumberInput = core.getInput('pull-request-number')
     const excludedReviewersInput = core.getInput('excluded-reviewers')
     const dryRun = core.getInput('dry-run')
@@ -40,6 +41,15 @@ export async function run(): Promise<void> {
         `Invalid value for 'number-of-reviewers': ${numberOfReviewersInput}`
       )
     }
+    let maxNumberOfReviewers = Infinity
+    if (maxNumberOfReviewersInput) {
+      maxNumberOfReviewers = parseInt(maxNumberOfReviewersInput)
+      if (isNaN(maxNumberOfReviewers)) {
+        throw new Error(
+          `Invalid value for 'max-number-of-reviewers': ${maxNumberOfReviewersInput}`
+        )
+      }
+    }
     let excludedReviewersList: string[] = []
     if (excludedReviewersInput.length > 0) {
       excludedReviewersList = excludedReviewersInput
@@ -59,7 +69,21 @@ export async function run(): Promise<void> {
       reviewer => reviewer.login
     )
 
-    core.info(`Will add ${numberOfReviewers} reviewers to PR: #${pull_number}`)
+    if (existingReviewers.length >= maxNumberOfReviewers) {
+      core.info(
+        `PR #${pull_number} already has ${existingReviewers.length} reviewers. ${maxNumberOfReviewers} reviewer(s) is the maximum. Not adding more reviewers.`
+      )
+      return
+    }
+
+    const numberOfReviewersToAdd = Math.min(
+      numberOfReviewers,
+      maxNumberOfReviewers - existingReviewers.length
+    )
+
+    core.info(
+      `Will add ${numberOfReviewersToAdd} reviewers to PR: #${pull_number}`
+    )
 
     const { data: activities } = await octokit.rest.activity.listRepoEvents({
       owner,
@@ -90,7 +114,7 @@ export async function run(): Promise<void> {
 
     const reviewers = Array.from(activeUsers)
       .sort(() => 0.5 - Math.random())
-      .slice(0, numberOfReviewers)
+      .slice(0, numberOfReviewersToAdd)
 
     if (dryRun === 'true') {
       core.info(

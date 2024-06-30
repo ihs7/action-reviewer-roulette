@@ -64,7 +64,8 @@ All inputs are **optional**. If not set, sensible defaults will be used.
 | `token` | `GITHUB_TOKEN` (permissions `contents: write` and `pull-requests: write`) or a `repo` scoped [Personal Access Token (PAT)](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token). | `GITHUB_TOKEN` |
 | `pull-request-number` | The number of the pull request to assign reviewers. | `${{ github.event.pull_request.number }}` |
 | `number-of-reviewers` | The number of reviewers add to the PR | `1` |
-| `excluded-reviewers` | Comma separated list of GitHub usernames to exclude from the random selection | `""` |
+| `max-number-of-reviewers` | The maximum number of reviewers for the PR, only adds reviewers up to this number | `''` |
+| `excluded-reviewers` | Comma separated list of GitHub usernames to exclude from the random selection | `''` |
 | `dry-run` | Useful when testing the action, does everything but add reviewers to PR | `false` |
 
 ### Excluding users from the random selection
