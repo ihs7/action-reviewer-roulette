@@ -13,3 +13,17 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    groups:
+      actions:
+        patterns:
+          - '@actions/*'
+      lint:
+        patterns:
+          - '*eslint*'
+          - '*prettier*'
+      jest:
+        patterns:
+          - '*jest*'
