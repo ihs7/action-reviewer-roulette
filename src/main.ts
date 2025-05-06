@@ -54,7 +54,7 @@ export async function run(): Promise<void> {
     if (excludedReviewersInput.length > 0) {
       excludedReviewersList = excludedReviewersInput
         .split(',')
-        .map(s => s.trim())
+        .map((s) => s.trim())
     }
     const { data: pr } = await octokit.rest.pulls.get({
       owner,
@@ -66,7 +66,7 @@ export async function run(): Promise<void> {
     }
 
     const existingReviewers = (pr.requested_reviewers || []).map(
-      reviewer => reviewer.login
+      (reviewer) => reviewer.login
     )
 
     if (existingReviewers.length >= maxNumberOfReviewers) {

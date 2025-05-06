@@ -30,7 +30,7 @@ describe('action', () => {
   })
 
   it('sets failed when pull-request-number not supplied', async () => {
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '5'
@@ -52,7 +52,7 @@ describe('action', () => {
   })
 
   it('sets failed when number-of-reviewers not supplied', async () => {
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return ''
@@ -75,7 +75,7 @@ describe('action', () => {
 
   it('sets failed when pull-request-number is invalid', async () => {
     const invalidPrNumber = 'foo'
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '5'
@@ -98,7 +98,7 @@ describe('action', () => {
 
   it('sets failed when max-number-of-reviewers is invalid', async () => {
     const invalidMaxNumberOfReviewers = 'foo'
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '5'
@@ -123,7 +123,7 @@ describe('action', () => {
 
   it('sets failed when number-of-reviewers is invalid', async () => {
     const invalidNumberOfReviewers = 'foo'
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return invalidNumberOfReviewers
@@ -145,7 +145,7 @@ describe('action', () => {
   })
 
   it('sets failed when token not supplied', async () => {
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '5'
@@ -169,7 +169,7 @@ describe('action', () => {
 
   it('sets failed when PR not found', async () => {
     const prNumber = '123'
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '5'
@@ -202,7 +202,7 @@ describe('action', () => {
   })
 
   it('should find no eligible reviewers', async () => {
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '1'
@@ -242,7 +242,7 @@ describe('action', () => {
   })
 
   it('should add info when dry-run', async () => {
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '1'
@@ -285,7 +285,7 @@ describe('action', () => {
   })
 
   it('should add reviewers', async () => {
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '1'
@@ -330,7 +330,7 @@ describe('action', () => {
   })
 
   it('should not pick excluded reviewers', async () => {
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '1'
@@ -381,7 +381,7 @@ describe('action', () => {
   })
 
   it('should pick random reviewers', async () => {
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '1'
@@ -431,7 +431,7 @@ describe('action', () => {
   })
 
   it('should not add existing reviewer', async () => {
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '1'
@@ -487,7 +487,7 @@ describe('action', () => {
   it('should not add more reviewers if max-number-of-reviewers is reached', async () => {
     const prNumber = '123'
     const maxNumberOfReviewers = 1
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '1'
@@ -541,7 +541,7 @@ describe('action', () => {
   it('should add reviewers until max-number-of-reviewers is reached', async () => {
     const prNumber = '123'
     const maxNumberOfReviewers = 2
-    getInputMock.mockImplementation(name => {
+    getInputMock.mockImplementation((name) => {
       switch (name) {
         case 'number-of-reviewers':
           return '2'
