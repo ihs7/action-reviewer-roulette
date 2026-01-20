@@ -31523,6 +31523,60 @@ function requireGithub () {
 
 var githubExports = requireGithub();
 
+async function getActiveUsersFromEvents(octokit, context) {
+    const { owner, repo, prAuthor, existingReviewers, excludedReviewers } = context;
+    const { data: activities } = await octokit.rest.activity.listRepoEvents({
+        owner,
+        repo,
+        per_page: 100
+    });
+    const activeUsers = new Set();
+    for (const activity of activities) {
+        if (activeUsers.size >= 50)
+            break;
+        if (activity.actor == null)
+            continue;
+        if (activity.actor.login == null)
+            continue;
+        if (activity.actor.login === prAuthor)
+            continue;
+        if (activity.actor.login.includes('[bot]'))
+            continue;
+        if (existingReviewers.includes(activity.actor.login))
+            continue;
+        if (excludedReviewers.includes(activity.actor.login))
+            continue;
+        activeUsers.add(activity.actor.login);
+    }
+    return activeUsers;
+}
+async function getCollaborators(octokit, context) {
+    const { owner, repo, prAuthor, existingReviewers, excludedReviewers } = context;
+    const collaborators = new Set();
+    try {
+        const { data } = await octokit.rest.repos.listCollaborators({
+            owner,
+            repo,
+            permission: 'push',
+            per_page: 100
+        });
+        for (const collaborator of data) {
+            if (collaborator.login === prAuthor)
+                continue;
+            if (collaborator.login.includes('[bot]'))
+                continue;
+            if (existingReviewers.includes(collaborator.login))
+                continue;
+            if (excludedReviewers.includes(collaborator.login))
+                continue;
+            collaborators.add(collaborator.login);
+        }
+    }
+    catch (error) {
+        coreExports.warning(`Failed to fetch collaborators: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    return collaborators;
+}
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -31541,7 +31595,7 @@ async function run() {
             throw new Error(`Input 'pull-request-number' not supplied. Unable to continue.`);
         }
         const pull_number = parseInt(pullRequestNumberInput);
-        if (isNaN(pull_number)) {
+        if (Number.isNaN(pull_number)) {
             throw new Error(`Invalid value for 'pull-request-number': ${pullRequestNumberInput}`);
         }
         if (!token) {
@@ -31551,13 +31605,13 @@ async function run() {
             throw new Error(`Input 'number-of-reviewers' not supplied. Unable to continue.`);
         }
         const numberOfReviewers = parseInt(numberOfReviewersInput);
-        if (isNaN(numberOfReviewers)) {
+        if (Number.isNaN(numberOfReviewers)) {
             throw new Error(`Invalid value for 'number-of-reviewers': ${numberOfReviewersInput}`);
         }
         let maxNumberOfReviewers = Infinity;
         if (maxNumberOfReviewersInput) {
             maxNumberOfReviewers = parseInt(maxNumberOfReviewersInput);
-            if (isNaN(maxNumberOfReviewers)) {
+            if (Number.isNaN(maxNumberOfReviewers)) {
                 throw new Error(`Invalid value for 'max-number-of-reviewers': ${maxNumberOfReviewersInput}`);
             }
         }
@@ -31582,35 +31636,27 @@ async function run() {
         }
         const numberOfReviewersToAdd = Math.min(numberOfReviewers, maxNumberOfReviewers - existingReviewers.length);
         coreExports.info(`Will add ${numberOfReviewersToAdd} reviewers to PR: #${pull_number}`);
-        const { data: activities } = await octokit.rest.activity.listRepoEvents({
+        const reviewerContext = {
             owner,
             repo,
-            per_page: 100
-        });
-        const activeUsers = new Set();
-        for (const activity of activities) {
-            if (activeUsers.size >= 50)
-                break;
-            if (activity.actor == null)
-                continue;
-            if (activity.actor.login == null)
-                continue;
-            if (activity.actor.login === pr.user.login)
-                continue;
-            if (activity.actor.login.includes('[bot]'))
-                continue;
-            if (existingReviewers.includes(activity.actor.login))
-                continue;
-            if (excludedReviewersList.includes(activity.actor.login))
-                continue;
-            activeUsers.add(activity.actor.login);
+            prAuthor: pr.user.login,
+            existingReviewers,
+            excludedReviewers: excludedReviewersList
+        };
+        let activeUsers = await getActiveUsersFromEvents(octokit, reviewerContext);
+        if (activeUsers.size > 0) {
+            coreExports.info(`Found ${activeUsers.size} users from recent activity who are eligible to be reviewers.`);
+        }
+        else {
+            coreExports.info('No recent activity found, falling back to repository collaborators.');
+            activeUsers = await getCollaborators(octokit, reviewerContext);
+            if (activeUsers.size > 0) {
+                coreExports.info(`Found ${activeUsers.size} collaborators who are eligible to be reviewers.`);
+            }
         }
         if (activeUsers.size === 0) {
             coreExports.warning('Found no eligible reviewers to add.');
             return;
-        }
-        else {
-            coreExports.info(`Found ${activeUsers.size} users who are eligible to be reviewers.`);
         }
         const reviewers = Array.from(activeUsers)
             .sort(() => 0.5 - Math.random())

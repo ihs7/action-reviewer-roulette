@@ -227,6 +227,11 @@ describe('action', () => {
             get: jest
               .fn()
               .mockResolvedValue({ data: { user: { login: 'any' } } })
+          },
+          repos: {
+            listCollaborators: jest
+              .fn()
+              .mockResolvedValue({ data: [{ login: 'any' }] })
           }
         }
       }
@@ -321,7 +326,7 @@ describe('action', () => {
     expect(errorMock).not.toHaveBeenCalled()
     expect(infoMock).toHaveBeenNthCalledWith(
       2,
-      'Found 1 users who are eligible to be reviewers.'
+      'Found 1 users from recent activity who are eligible to be reviewers.'
     )
     expect(infoMock).toHaveBeenNthCalledWith(
       3,
@@ -372,7 +377,7 @@ describe('action', () => {
     expect(errorMock).not.toHaveBeenCalled()
     expect(infoMock).toHaveBeenNthCalledWith(
       2,
-      'Found 1 users who are eligible to be reviewers.'
+      'Found 1 users from recent activity who are eligible to be reviewers.'
     )
     expect(infoMock).toHaveBeenNthCalledWith(
       3,
@@ -422,7 +427,7 @@ describe('action', () => {
     expect(errorMock).not.toHaveBeenCalled()
     expect(infoMock).toHaveBeenNthCalledWith(
       2,
-      'Found 3 users who are eligible to be reviewers.'
+      'Found 3 users from recent activity who are eligible to be reviewers.'
     )
     expect(infoMock).toHaveBeenNthCalledWith(
       3,
@@ -476,7 +481,7 @@ describe('action', () => {
     expect(errorMock).not.toHaveBeenCalled()
     expect(infoMock).toHaveBeenNthCalledWith(
       2,
-      'Found 1 users who are eligible to be reviewers.'
+      'Found 1 users from recent activity who are eligible to be reviewers.'
     )
     expect(infoMock).toHaveBeenNthCalledWith(
       3,
@@ -592,11 +597,167 @@ describe('action', () => {
     )
     expect(infoMock).toHaveBeenNthCalledWith(
       2,
-      'Found 1 users who are eligible to be reviewers.'
+      'Found 1 users from recent activity who are eligible to be reviewers.'
     )
     expect(infoMock).toHaveBeenNthCalledWith(
       3,
       `Adding following users as reviewers: ${reviewerLoginToAdd}`
+    )
+  })
+
+  it('should fall back to collaborators when no recent activity', async () => {
+    getInputMock.mockImplementation((name) => {
+      switch (name) {
+        case 'number-of-reviewers':
+          return '1'
+        case 'pull-request-number':
+          return '123'
+        case 'token':
+          return 'some-token'
+        default:
+          return ''
+      }
+    })
+    const collaboratorToAdd = 'collaborator-user'
+    const prRaiser = 'pr-author'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getOctokitMock.mockImplementation((): any => {
+      return {
+        rest: {
+          activity: {
+            listRepoEvents: jest.fn().mockResolvedValue({ data: [] })
+          },
+          pulls: {
+            get: jest
+              .fn()
+              .mockResolvedValue({ data: { user: { login: prRaiser } } }),
+            requestReviewers: jest.fn().mockResolvedValue({})
+          },
+          repos: {
+            listCollaborators: jest.fn().mockResolvedValue({
+              data: [{ login: collaboratorToAdd }, { login: prRaiser }]
+            })
+          }
+        }
+      }
+    })
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(infoMock).toHaveBeenNthCalledWith(
+      2,
+      'No recent activity found, falling back to repository collaborators.'
+    )
+    expect(infoMock).toHaveBeenNthCalledWith(
+      3,
+      'Found 1 collaborators who are eligible to be reviewers.'
+    )
+    expect(infoMock).toHaveBeenNthCalledWith(
+      4,
+      `Adding following users as reviewers: ${collaboratorToAdd}`
+    )
+  })
+
+  it('should exclude bots from collaborators fallback', async () => {
+    getInputMock.mockImplementation((name) => {
+      switch (name) {
+        case 'number-of-reviewers':
+          return '1'
+        case 'pull-request-number':
+          return '123'
+        case 'token':
+          return 'some-token'
+        default:
+          return ''
+      }
+    })
+    const collaboratorToAdd = 'human-collaborator'
+    const prRaiser = 'pr-author'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getOctokitMock.mockImplementation((): any => {
+      return {
+        rest: {
+          activity: {
+            listRepoEvents: jest.fn().mockResolvedValue({ data: [] })
+          },
+          pulls: {
+            get: jest
+              .fn()
+              .mockResolvedValue({ data: { user: { login: prRaiser } } }),
+            requestReviewers: jest.fn().mockResolvedValue({})
+          },
+          repos: {
+            listCollaborators: jest.fn().mockResolvedValue({
+              data: [
+                { login: collaboratorToAdd },
+                { login: 'dependabot[bot]' },
+                { login: 'github-actions[bot]' }
+              ]
+            })
+          }
+        }
+      }
+    })
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(infoMock).toHaveBeenNthCalledWith(
+      3,
+      'Found 1 collaborators who are eligible to be reviewers.'
+    )
+    expect(infoMock).toHaveBeenNthCalledWith(
+      4,
+      `Adding following users as reviewers: ${collaboratorToAdd}`
+    )
+  })
+
+  it('should warn when collaborators API fails', async () => {
+    getInputMock.mockImplementation((name) => {
+      switch (name) {
+        case 'number-of-reviewers':
+          return '1'
+        case 'pull-request-number':
+          return '123'
+        case 'token':
+          return 'some-token'
+        default:
+          return ''
+      }
+    })
+    const prRaiser = 'pr-author'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getOctokitMock.mockImplementation((): any => {
+      return {
+        rest: {
+          activity: {
+            listRepoEvents: jest.fn().mockResolvedValue({ data: [] })
+          },
+          pulls: {
+            get: jest
+              .fn()
+              .mockResolvedValue({ data: { user: { login: prRaiser } } })
+          },
+          repos: {
+            listCollaborators: jest
+              .fn()
+              .mockRejectedValue(new Error('Insufficient permissions'))
+          }
+        }
+      }
+    })
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(warningMock).toHaveBeenNthCalledWith(
+      1,
+      'Failed to fetch collaborators: Insufficient permissions'
+    )
+    expect(warningMock).toHaveBeenNthCalledWith(
+      2,
+      'Found no eligible reviewers to add.'
     )
   })
 })
