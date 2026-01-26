@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Check if all actions are full SHA pins
         uses: ihs7/action-sha-pinned-actions@e805c42c9e2c7deb3f339079c143507c28df129f # v1.0.0
@@ -57,7 +57,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Find Pull Request
         uses: juliangruber/find-pull-request-action@952b3bb1ddb2dcc0aa3479e98bb1c2d1a922f096 # v1.10.0
