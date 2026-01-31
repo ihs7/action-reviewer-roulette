@@ -1,7 +1,58 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 
-type Octokit = ReturnType<typeof github.getOctokit>
+type Octokit = {
+  rest: {
+    activity: {
+      listRepoEvents: (options: {
+        owner: string
+        repo: string
+        per_page: number
+      }) => Promise<{
+        data: Array<{ actor?: { login?: string | null } | null }>
+      }>
+    }
+    pulls: {
+      get: (options: {
+        owner: string
+        repo: string
+        pull_number: number
+      }) => Promise<{
+        data: {
+          user: { login: string }
+          requested_reviewers?: Array<{ login: string }> | null
+        } | null
+      }>
+      requestReviewers: (options: {
+        owner: string
+        repo: string
+        pull_number: number
+        reviewers: string[]
+      }) => Promise<unknown>
+    }
+    repos: {
+      listCollaborators: (options: {
+        owner: string
+        repo: string
+        permission: 'push' | 'pull' | 'triage' | 'maintain' | 'admin'
+        per_page: number
+      }) => Promise<{ data: Array<{ login: string }> }>
+    }
+  }
+}
+
+type CoreLike = {
+  getInput: (name: string) => string
+  info: (message: string) => void
+  warning: (message: string) => void
+  error: (message: string) => void
+  setFailed: (message: string) => void
+}
+
+type GithubLike = {
+  context: { repo: { owner: string; repo: string } }
+  getOctokit: (token: string) => Octokit
+}
 
 interface ReviewerContext {
   owner: string
@@ -39,7 +90,8 @@ async function getActiveUsersFromEvents(
 
 async function getCollaborators(
   octokit: Octokit,
-  context: ReviewerContext
+  context: ReviewerContext,
+  coreApi: CoreLike
 ): Promise<Set<string>> {
   const { owner, repo, prAuthor, existingReviewers, excludedReviewers } =
     context
@@ -61,7 +113,7 @@ async function getCollaborators(
       collaborators.add(collaborator.login)
     }
   } catch (error) {
-    core.warning(
+    coreApi.warning(
       `Failed to fetch collaborators: ${error instanceof Error ? error.message : 'Unknown error'}`
     )
   }
@@ -73,16 +125,21 @@ async function getCollaborators(
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
  */
-export async function run(): Promise<void> {
+export async function runWithDependencies(
+  coreApi: CoreLike,
+  githubApi: GithubLike
+): Promise<void> {
   try {
-    const token = core.getInput('token')
-    const { owner, repo } = github.context.repo
-    const octokit = github.getOctokit(token)
-    const numberOfReviewersInput = core.getInput('number-of-reviewers')
-    const maxNumberOfReviewersInput = core.getInput('max-number-of-reviewers')
-    const pullRequestNumberInput = core.getInput('pull-request-number')
-    const excludedReviewersInput = core.getInput('excluded-reviewers')
-    const dryRun = core.getInput('dry-run')
+    const token = coreApi.getInput('token')
+    const { owner, repo } = githubApi.context.repo
+    const octokit = githubApi.getOctokit(token)
+    const numberOfReviewersInput = coreApi.getInput('number-of-reviewers')
+    const maxNumberOfReviewersInput = coreApi.getInput(
+      'max-number-of-reviewers'
+    )
+    const pullRequestNumberInput = coreApi.getInput('pull-request-number')
+    const excludedReviewersInput = coreApi.getInput('excluded-reviewers')
+    const dryRun = coreApi.getInput('dry-run')
 
     if (!pullRequestNumberInput) {
       throw new Error(
@@ -133,12 +190,12 @@ export async function run(): Promise<void> {
       throw new Error(`PR #${pull_number} not found.`)
     }
 
-    const existingReviewers = (pr.requested_reviewers || []).map(
+    const existingReviewers = (pr.requested_reviewers ?? []).map(
       (reviewer) => reviewer.login
     )
 
     if (existingReviewers.length >= maxNumberOfReviewers) {
-      core.info(
+      coreApi.info(
         `PR #${pull_number} already has ${existingReviewers.length} reviewers. ${maxNumberOfReviewers} reviewer(s) is the maximum. Not adding more reviewers.`
       )
       return
@@ -149,7 +206,7 @@ export async function run(): Promise<void> {
       maxNumberOfReviewers - existingReviewers.length
     )
 
-    core.info(
+    coreApi.info(
       `Will add ${numberOfReviewersToAdd} reviewers to PR: #${pull_number}`
     )
 
@@ -164,23 +221,23 @@ export async function run(): Promise<void> {
     let activeUsers = await getActiveUsersFromEvents(octokit, reviewerContext)
 
     if (activeUsers.size > 0) {
-      core.info(
+      coreApi.info(
         `Found ${activeUsers.size} users from recent activity who are eligible to be reviewers.`
       )
     } else {
-      core.info(
+      coreApi.info(
         'No recent activity found, falling back to repository collaborators.'
       )
-      activeUsers = await getCollaborators(octokit, reviewerContext)
+      activeUsers = await getCollaborators(octokit, reviewerContext, coreApi)
       if (activeUsers.size > 0) {
-        core.info(
+        coreApi.info(
           `Found ${activeUsers.size} collaborators who are eligible to be reviewers.`
         )
       }
     }
 
     if (activeUsers.size === 0) {
-      core.warning('Found no eligible reviewers to add.')
+      coreApi.warning('Found no eligible reviewers to add.')
       return
     }
 
@@ -189,12 +246,12 @@ export async function run(): Promise<void> {
       .slice(0, numberOfReviewersToAdd)
 
     if (dryRun === 'true') {
-      core.info(
+      coreApi.info(
         `Dry run enabled. Skipping adding reviewers. Would've added following users as reviewers: ${reviewers.join(', ')}`
       )
       return
     }
-    core.info(`Adding following users as reviewers: ${reviewers.join(', ')}`)
+    coreApi.info(`Adding following users as reviewers: ${reviewers.join(', ')}`)
     const parameters = {
       owner,
       repo,
@@ -203,6 +260,10 @@ export async function run(): Promise<void> {
     }
     await octokit.rest.pulls.requestReviewers(parameters)
   } catch (error) {
-    if (error instanceof Error) core.setFailed(error.message)
+    if (error instanceof Error) coreApi.setFailed(error.message)
   }
+}
+
+export async function run(): Promise<void> {
+  await runWithDependencies(core, github)
 }

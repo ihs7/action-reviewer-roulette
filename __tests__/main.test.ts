@@ -1,763 +1,689 @@
-import * as core from '@actions/core'
-import * as github from '@actions/github'
-import * as main from '../src/main'
+import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
+import { runWithDependencies } from '../src/main.ts'
 
-const runMock = jest.spyOn(main, 'run')
+const createTestOctokit = (overrides = {}) => {
+  return {
+    rest: {
+      activity: { listRepoEvents: async () => ({ data: [] }) },
+      pulls: {
+        get: async () => ({
+          data: { user: { login: 'any' }, requested_reviewers: [] }
+        }),
+        requestReviewers: async () => ({})
+      },
+      repos: { listCollaborators: async () => ({ data: [] }) }
+    },
+    ...overrides
+  }
+}
 
-let infoMock: jest.SpiedFunction<typeof core.info>
-let warningMock: jest.SpiedFunction<typeof core.warning>
-let errorMock: jest.SpiedFunction<typeof core.error>
-let setFailedMock: jest.SpiedFunction<typeof core.setFailed>
-let getInputMock: jest.SpiedFunction<typeof core.getInput>
-let getOctokitMock: jest.SpiedFunction<typeof github.getOctokit>
+const createCoreApi = (t, inputs) => {
+  return {
+    getInput: t.mock.fn((name) => inputs[name] ?? ''),
+    info: t.mock.fn(() => undefined),
+    warning: t.mock.fn(() => undefined),
+    error: t.mock.fn(() => undefined),
+    setFailed: t.mock.fn(() => undefined)
+  }
+}
+
+const createGithubApi = (t, repo, octokit) => {
+  return {
+    context: { repo },
+    getOctokit: t.mock.fn(() => octokit)
+  }
+}
 
 describe('action', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
+  it('sets failed when pull-request-number not supplied', async (t) => {
+    const inputs = {
+      'number-of-reviewers': '5',
+      'pull-request-number': '',
+      token: 'some-token'
+    }
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      createTestOctokit()
+    )
 
-    infoMock = jest.spyOn(core, 'info').mockImplementation()
-    warningMock = jest.spyOn(core, 'warning').mockImplementation()
-    errorMock = jest.spyOn(core, 'error').mockImplementation()
-    getInputMock = jest.spyOn(core, 'getInput').mockImplementation()
-    getOctokitMock = jest.spyOn(github, 'getOctokit').mockImplementation()
-    setFailedMock = jest.spyOn(core, 'setFailed').mockImplementation()
-    jest.spyOn(github.context, 'repo', 'get').mockImplementation(() => {
-      return {
-        owner: 'some-owner',
-        repo: 'some-repo'
-      }
-    })
-  })
+    await runWithDependencies(coreApi, githubApi)
 
-  it('sets failed when pull-request-number not supplied', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '5'
-        case 'pull-request-number':
-          return ''
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(setFailedMock).toHaveBeenNthCalledWith(
-      1,
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.setFailed.mock.calls[0].arguments, [
       "Input 'pull-request-number' not supplied. Unable to continue."
-    )
+    ])
   })
 
-  it('sets failed when number-of-reviewers not supplied', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return ''
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(setFailedMock).toHaveBeenNthCalledWith(
-      1,
+  it('sets failed when number-of-reviewers not supplied', async (t) => {
+    const inputs = {
+      'number-of-reviewers': '',
+      'pull-request-number': '123',
+      token: 'some-token'
+    }
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      createTestOctokit()
+    )
+
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.setFailed.mock.calls[0].arguments, [
       "Input 'number-of-reviewers' not supplied. Unable to continue."
-    )
+    ])
   })
 
-  it('sets failed when pull-request-number is invalid', async () => {
+  it('sets failed when pull-request-number is invalid', async (t) => {
     const invalidPrNumber = 'foo'
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '5'
-        case 'pull-request-number':
-          return invalidPrNumber
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(setFailedMock).toHaveBeenNthCalledWith(
-      1,
+    const inputs = {
+      'number-of-reviewers': '5',
+      'pull-request-number': invalidPrNumber,
+      token: 'some-token'
+    }
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      createTestOctokit()
+    )
+
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.setFailed.mock.calls[0].arguments, [
       `Invalid value for 'pull-request-number': ${invalidPrNumber}`
-    )
+    ])
   })
 
-  it('sets failed when max-number-of-reviewers is invalid', async () => {
+  it('sets failed when max-number-of-reviewers is invalid', async (t) => {
     const invalidMaxNumberOfReviewers = 'foo'
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '5'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        case 'max-number-of-reviewers':
-          return invalidMaxNumberOfReviewers
-        default:
-          return ''
-      }
-    })
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(setFailedMock).toHaveBeenNthCalledWith(
-      1,
+    const inputs = {
+      'number-of-reviewers': '5',
+      'pull-request-number': '123',
+      token: 'some-token',
+      'max-number-of-reviewers': invalidMaxNumberOfReviewers
+    }
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      createTestOctokit()
+    )
+
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.setFailed.mock.calls[0].arguments, [
       `Invalid value for 'max-number-of-reviewers': ${invalidMaxNumberOfReviewers}`
-    )
+    ])
   })
 
-  it('sets failed when number-of-reviewers is invalid', async () => {
+  it('sets failed when number-of-reviewers is invalid', async (t) => {
     const invalidNumberOfReviewers = 'foo'
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return invalidNumberOfReviewers
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(setFailedMock).toHaveBeenNthCalledWith(
-      1,
+    const inputs = {
+      'number-of-reviewers': invalidNumberOfReviewers,
+      'pull-request-number': '123',
+      token: 'some-token'
+    }
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      createTestOctokit()
+    )
+
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.setFailed.mock.calls[0].arguments, [
       `Invalid value for 'number-of-reviewers': ${invalidNumberOfReviewers}`
-    )
+    ])
   })
 
-  it('sets failed when token not supplied', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '5'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return ''
-        default:
-          return ''
-      }
-    })
+  it('sets failed when token not supplied', async (t) => {
+    const inputs = {
+      'number-of-reviewers': '5',
+      'pull-request-number': '123',
+      token: ''
+    }
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      createTestOctokit()
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(setFailedMock).toHaveBeenNthCalledWith(
-      1,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.setFailed.mock.calls[0].arguments, [
       "Input 'token' not supplied. Unable to continue."
-    )
+    ])
   })
 
-  it('sets failed when PR not found', async () => {
+  it('sets failed when PR not found', async (t) => {
     const prNumber = '123'
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '5'
-        case 'pull-request-number':
-          return prNumber
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
+    const inputs = {
+      'number-of-reviewers': '5',
+      'pull-request-number': prNumber,
+      token: 'some-token'
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        pulls: {
+          get: async () => ({ data: null }),
+          requestReviewers: async () => ({})
+        },
+        activity: { listRepoEvents: async () => ({ data: [] }) },
+        repos: { listCollaborators: async () => ({ data: [] }) }
       }
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          pulls: {
-            get: jest.fn().mockResolvedValue({ data: null })
-          }
-        }
-      }
-    })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(setFailedMock).toHaveBeenNthCalledWith(
-      1,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.setFailed.mock.calls[0].arguments, [
       `PR #${prNumber} not found.`
-    )
+    ])
   })
 
-  it('should find no eligible reviewers', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
+  it('should find no eligible reviewers', async (t) => {
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': '123',
+      token: 'some-token'
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: {
+          listRepoEvents: async () => ({ data: [{ actor: { login: 'any' } }] })
+        },
+        pulls: {
+          get: async () => ({
+            data: { user: { login: 'any' }, requested_reviewers: [] }
+          }),
+          requestReviewers: async () => ({})
+        },
+        repos: { listCollaborators: async () => ({ data: [{ login: 'any' }] }) }
       }
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest
-              .fn()
-              .mockResolvedValue({ data: [{ actor: { login: 'any' } }] })
-          },
-          pulls: {
-            get: jest
-              .fn()
-              .mockResolvedValue({ data: { user: { login: 'any' } } })
-          },
-          repos: {
-            listCollaborators: jest
-              .fn()
-              .mockResolvedValue({ data: [{ login: 'any' }] })
-          }
-        }
-      }
-    })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(warningMock).toHaveBeenNthCalledWith(
-      1,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.warning.mock.calls[0].arguments, [
       'Found no eligible reviewers to add.'
-    )
+    ])
   })
 
-  it('should add info when dry-run', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        case 'dry-run':
-          return 'true'
-        default:
-          return ''
-      }
-    })
+  it('should add info when dry-run', async (t) => {
     const reviewerLoginToAdd = 'other'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({
-              data: [{ actor: { login: reviewerLoginToAdd } }]
-            })
-          },
-          pulls: {
-            get: jest
-              .fn()
-              .mockResolvedValue({ data: { user: { login: 'any' } } })
-          }
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': '123',
+      token: 'some-token',
+      'dry-run': 'true'
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: {
+          listRepoEvents: async () => ({
+            data: [{ actor: { login: reviewerLoginToAdd } }]
+          })
+        },
+        pulls: {
+          get: async () => ({
+            data: { user: { login: 'any' }, requested_reviewers: [] }
+          }),
+          requestReviewers: async () => ({})
         }
       }
     })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(infoMock).toHaveBeenNthCalledWith(
-      3,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.info.mock.calls[2].arguments, [
       `Dry run enabled. Skipping adding reviewers. Would've added following users as reviewers: ${reviewerLoginToAdd}`
-    )
+    ])
   })
 
-  it('should add reviewers', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
+  it('should add reviewers', async (t) => {
     const reviewerLoginToAdd = 'other'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({
-              data: [{ actor: { login: reviewerLoginToAdd } }]
-            })
-          },
-          pulls: {
-            get: jest
-              .fn()
-              .mockResolvedValue({ data: { user: { login: 'any' } } })
-          }
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': '123',
+      token: 'some-token'
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: {
+          listRepoEvents: async () => ({
+            data: [{ actor: { login: reviewerLoginToAdd } }]
+          })
+        },
+        pulls: {
+          get: async () => ({
+            data: { user: { login: 'any' }, requested_reviewers: [] }
+          }),
+          requestReviewers: async () => ({})
         }
       }
     })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(infoMock).toHaveBeenNthCalledWith(
-      2,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.info.mock.calls[1].arguments, [
       'Found 1 users from recent activity who are eligible to be reviewers.'
-    )
-    expect(infoMock).toHaveBeenNthCalledWith(
-      3,
+    ])
+    assert.deepStrictEqual(coreApi.info.mock.calls[2].arguments, [
       `Adding following users as reviewers: ${reviewerLoginToAdd}`
-    )
+    ])
   })
 
-  it('should not pick excluded reviewers', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        case 'excluded-reviewers':
-          return 'excluded'
-        default:
-          return ''
-      }
-    })
+  it('should not pick excluded reviewers', async (t) => {
     const reviewerLoginToAdd = 'other'
     const excludedReviewer = 'excluded'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({
-              data: [
-                { actor: { login: reviewerLoginToAdd } },
-                { actor: { login: excludedReviewer } }
-              ]
-            })
-          },
-          pulls: {
-            get: jest
-              .fn()
-              .mockResolvedValue({ data: { user: { login: 'any' } } })
-          }
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': '123',
+      token: 'some-token',
+      'excluded-reviewers': excludedReviewer
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: {
+          listRepoEvents: async () => ({
+            data: [
+              { actor: { login: reviewerLoginToAdd } },
+              { actor: { login: excludedReviewer } }
+            ]
+          })
+        },
+        pulls: {
+          get: async () => ({
+            data: { user: { login: 'any' }, requested_reviewers: [] }
+          }),
+          requestReviewers: async () => ({})
         }
       }
     })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(infoMock).toHaveBeenNthCalledWith(
-      2,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.info.mock.calls[1].arguments, [
       'Found 1 users from recent activity who are eligible to be reviewers.'
-    )
-    expect(infoMock).toHaveBeenNthCalledWith(
-      3,
+    ])
+    assert.deepStrictEqual(coreApi.info.mock.calls[2].arguments, [
       `Adding following users as reviewers: ${reviewerLoginToAdd}`
-    )
+    ])
   })
 
-  it('should pick random reviewers', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
-    jest.spyOn(global.Math, 'random').mockReturnValue(1)
+  it('should pick random reviewers', async (t) => {
     const reviewerLoginToAdd = 'guaranteed-random'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({
-              data: [
-                { actor: { login: '1' } },
-                { actor: { login: '2' } },
-                { actor: { login: reviewerLoginToAdd } }
-              ]
-            })
-          },
-          pulls: {
-            get: jest
-              .fn()
-              .mockResolvedValue({ data: { user: { login: 'any' } } })
-          }
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': '123',
+      token: 'some-token'
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: {
+          listRepoEvents: async () => ({
+            data: [
+              { actor: { login: '1' } },
+              { actor: { login: '2' } },
+              { actor: { login: reviewerLoginToAdd } }
+            ]
+          })
+        },
+        pulls: {
+          get: async () => ({
+            data: { user: { login: 'any' }, requested_reviewers: [] }
+          }),
+          requestReviewers: async () => ({})
         }
       }
     })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(infoMock).toHaveBeenNthCalledWith(
-      2,
+    t.mock.method(global.Math, 'random', () => 1)
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.info.mock.calls[1].arguments, [
       'Found 3 users from recent activity who are eligible to be reviewers.'
-    )
-    expect(infoMock).toHaveBeenNthCalledWith(
-      3,
+    ])
+    assert.deepStrictEqual(coreApi.info.mock.calls[2].arguments, [
       `Adding following users as reviewers: ${reviewerLoginToAdd}`
-    )
+    ])
   })
 
-  it('should not add existing reviewer', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
+  it('should not add existing reviewer', async (t) => {
     const reviewerLoginToAdd = 'other'
     const existingReviewer = 'existing'
     const prRaiser = 'any'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({
-              data: [
-                { actor: { login: reviewerLoginToAdd } },
-                { actor: { login: existingReviewer } },
-                { actor: { login: prRaiser } }
-              ]
-            })
-          },
-          pulls: {
-            get: jest.fn().mockResolvedValue({
-              data: {
-                user: { login: prRaiser },
-                requested_reviewers: [{ login: existingReviewer }]
-              }
-            })
-          }
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': '123',
+      token: 'some-token'
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: {
+          listRepoEvents: async () => ({
+            data: [
+              { actor: { login: reviewerLoginToAdd } },
+              { actor: { login: existingReviewer } },
+              { actor: { login: prRaiser } }
+            ]
+          })
+        },
+        pulls: {
+          get: async () => ({
+            data: {
+              user: { login: prRaiser },
+              requested_reviewers: [{ login: existingReviewer }]
+            }
+          }),
+          requestReviewers: async () => ({})
         }
       }
     })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(infoMock).toHaveBeenNthCalledWith(
-      2,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.info.mock.calls[1].arguments, [
       'Found 1 users from recent activity who are eligible to be reviewers.'
-    )
-    expect(infoMock).toHaveBeenNthCalledWith(
-      3,
+    ])
+    assert.deepStrictEqual(coreApi.info.mock.calls[2].arguments, [
       `Adding following users as reviewers: ${reviewerLoginToAdd}`
-    )
+    ])
   })
 
-  it('should not add more reviewers if max-number-of-reviewers is reached', async () => {
+  it('should not add more reviewers if max-number-of-reviewers is reached', async (t) => {
     const prNumber = '123'
     const maxNumberOfReviewers = 1
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return prNumber
-        case 'token':
-          return 'some-token'
-        case 'max-number-of-reviewers':
-          return maxNumberOfReviewers.toString()
-        default:
-          return ''
-      }
-    })
     const reviewerLoginToAdd = 'other'
     const existingReviewer = 'existing'
     const prRaiser = 'any'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({
-              data: [
-                { actor: { login: reviewerLoginToAdd } },
-                { actor: { login: existingReviewer } },
-                { actor: { login: prRaiser } }
-              ]
-            })
-          },
-          pulls: {
-            get: jest.fn().mockResolvedValue({
-              data: {
-                user: { login: prRaiser },
-                requested_reviewers: [{ login: existingReviewer }]
-              }
-            })
-          }
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': prNumber,
+      token: 'some-token',
+      'max-number-of-reviewers': maxNumberOfReviewers.toString()
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: {
+          listRepoEvents: async () => ({
+            data: [
+              { actor: { login: reviewerLoginToAdd } },
+              { actor: { login: existingReviewer } },
+              { actor: { login: prRaiser } }
+            ]
+          })
+        },
+        pulls: {
+          get: async () => ({
+            data: {
+              user: { login: prRaiser },
+              requested_reviewers: [{ login: existingReviewer }]
+            }
+          }),
+          requestReviewers: async () => ({})
         }
       }
     })
-
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(infoMock).toHaveBeenNthCalledWith(
-      1,
-      `PR #${prNumber} already has 1 reviewers. ${maxNumberOfReviewers} reviewer(s) is the maximum. Not adding more reviewers.`
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
     )
+
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.info.mock.calls[0].arguments, [
+      `PR #${prNumber} already has 1 reviewers. ${maxNumberOfReviewers} reviewer(s) is the maximum. Not adding more reviewers.`
+    ])
   })
 
-  it('should add reviewers until max-number-of-reviewers is reached', async () => {
+  it('should add reviewers until max-number-of-reviewers is reached', async (t) => {
     const prNumber = '123'
     const maxNumberOfReviewers = 2
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '2'
-        case 'pull-request-number':
-          return prNumber
-        case 'token':
-          return 'some-token'
-        case 'max-number-of-reviewers':
-          return maxNumberOfReviewers.toString()
-        default:
-          return ''
-      }
-    })
     const reviewerLoginToAdd = 'other'
     const existingReviewer = 'existing'
     const prRaiser = 'any'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({
-              data: [
-                { actor: { login: reviewerLoginToAdd } },
-                { actor: { login: existingReviewer } },
-                { actor: { login: prRaiser } }
-              ]
-            })
-          },
-          pulls: {
-            get: jest.fn().mockResolvedValue({
-              data: {
-                user: { login: prRaiser },
-                requested_reviewers: [{ login: existingReviewer }]
-              }
-            })
-          }
+    const inputs = {
+      'number-of-reviewers': '2',
+      'pull-request-number': prNumber,
+      token: 'some-token',
+      'max-number-of-reviewers': maxNumberOfReviewers.toString()
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: {
+          listRepoEvents: async () => ({
+            data: [
+              { actor: { login: reviewerLoginToAdd } },
+              { actor: { login: existingReviewer } },
+              { actor: { login: prRaiser } }
+            ]
+          })
+        },
+        pulls: {
+          get: async () => ({
+            data: {
+              user: { login: prRaiser },
+              requested_reviewers: [{ login: existingReviewer }]
+            }
+          }),
+          requestReviewers: async () => ({})
         }
       }
     })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(infoMock).toHaveBeenNthCalledWith(
-      1,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.info.mock.calls[0].arguments, [
       `Will add 1 reviewers to PR: #${prNumber}`
-    )
-    expect(infoMock).toHaveBeenNthCalledWith(
-      2,
+    ])
+    assert.deepStrictEqual(coreApi.info.mock.calls[1].arguments, [
       'Found 1 users from recent activity who are eligible to be reviewers.'
-    )
-    expect(infoMock).toHaveBeenNthCalledWith(
-      3,
+    ])
+    assert.deepStrictEqual(coreApi.info.mock.calls[2].arguments, [
       `Adding following users as reviewers: ${reviewerLoginToAdd}`
-    )
+    ])
   })
 
-  it('should fall back to collaborators when no recent activity', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
+  it('should fall back to collaborators when no recent activity', async (t) => {
     const collaboratorToAdd = 'collaborator-user'
     const prRaiser = 'pr-author'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({ data: [] })
-          },
-          pulls: {
-            get: jest
-              .fn()
-              .mockResolvedValue({ data: { user: { login: prRaiser } } }),
-            requestReviewers: jest.fn().mockResolvedValue({})
-          },
-          repos: {
-            listCollaborators: jest.fn().mockResolvedValue({
-              data: [{ login: collaboratorToAdd }, { login: prRaiser }]
-            })
-          }
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': '123',
+      token: 'some-token'
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: { listRepoEvents: async () => ({ data: [] }) },
+        pulls: {
+          get: async () => ({
+            data: { user: { login: prRaiser }, requested_reviewers: [] }
+          }),
+          requestReviewers: async () => ({})
+        },
+        repos: {
+          listCollaborators: async () => ({
+            data: [{ login: collaboratorToAdd }, { login: prRaiser }]
+          })
         }
       }
     })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(infoMock).toHaveBeenNthCalledWith(
-      2,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.info.mock.calls[1].arguments, [
       'No recent activity found, falling back to repository collaborators.'
-    )
-    expect(infoMock).toHaveBeenNthCalledWith(
-      3,
+    ])
+    assert.deepStrictEqual(coreApi.info.mock.calls[2].arguments, [
       'Found 1 collaborators who are eligible to be reviewers.'
-    )
-    expect(infoMock).toHaveBeenNthCalledWith(
-      4,
+    ])
+    assert.deepStrictEqual(coreApi.info.mock.calls[3].arguments, [
       `Adding following users as reviewers: ${collaboratorToAdd}`
-    )
+    ])
   })
 
-  it('should exclude bots from collaborators fallback', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
+  it('should exclude bots from collaborators fallback', async (t) => {
     const collaboratorToAdd = 'human-collaborator'
     const prRaiser = 'pr-author'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({ data: [] })
-          },
-          pulls: {
-            get: jest
-              .fn()
-              .mockResolvedValue({ data: { user: { login: prRaiser } } }),
-            requestReviewers: jest.fn().mockResolvedValue({})
-          },
-          repos: {
-            listCollaborators: jest.fn().mockResolvedValue({
-              data: [
-                { login: collaboratorToAdd },
-                { login: 'dependabot[bot]' },
-                { login: 'github-actions[bot]' }
-              ]
-            })
-          }
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': '123',
+      token: 'some-token'
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: { listRepoEvents: async () => ({ data: [] }) },
+        pulls: {
+          get: async () => ({
+            data: { user: { login: prRaiser }, requested_reviewers: [] }
+          }),
+          requestReviewers: async () => ({})
+        },
+        repos: {
+          listCollaborators: async () => ({
+            data: [
+              { login: collaboratorToAdd },
+              { login: 'dependabot[bot]' },
+              { login: 'github-actions[bot]' }
+            ]
+          })
         }
       }
     })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(infoMock).toHaveBeenNthCalledWith(
-      3,
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    assert.deepStrictEqual(coreApi.info.mock.calls[2].arguments, [
       'Found 1 collaborators who are eligible to be reviewers.'
-    )
-    expect(infoMock).toHaveBeenNthCalledWith(
-      4,
+    ])
+    assert.deepStrictEqual(coreApi.info.mock.calls[3].arguments, [
       `Adding following users as reviewers: ${collaboratorToAdd}`
-    )
+    ])
   })
 
-  it('should warn when collaborators API fails', async () => {
-    getInputMock.mockImplementation((name) => {
-      switch (name) {
-        case 'number-of-reviewers':
-          return '1'
-        case 'pull-request-number':
-          return '123'
-        case 'token':
-          return 'some-token'
-        default:
-          return ''
-      }
-    })
+  it('should warn when collaborators API fails', async (t) => {
     const prRaiser = 'pr-author'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getOctokitMock.mockImplementation((): any => {
-      return {
-        rest: {
-          activity: {
-            listRepoEvents: jest.fn().mockResolvedValue({ data: [] })
-          },
-          pulls: {
-            get: jest
-              .fn()
-              .mockResolvedValue({ data: { user: { login: prRaiser } } })
-          },
-          repos: {
-            listCollaborators: jest
-              .fn()
-              .mockRejectedValue(new Error('Insufficient permissions'))
+    const inputs = {
+      'number-of-reviewers': '1',
+      'pull-request-number': '123',
+      token: 'some-token'
+    }
+    const octokit = createTestOctokit({
+      rest: {
+        activity: { listRepoEvents: async () => ({ data: [] }) },
+        pulls: {
+          get: async () => ({
+            data: { user: { login: prRaiser }, requested_reviewers: [] }
+          }),
+          requestReviewers: async () => ({})
+        },
+        repos: {
+          listCollaborators: async () => {
+            throw new Error('Insufficient permissions')
           }
         }
       }
     })
+    const coreApi = createCoreApi(t, inputs)
+    const githubApi = createGithubApi(
+      t,
+      { owner: 'some-owner', repo: 'some-repo' },
+      octokit
+    )
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-    expect(errorMock).not.toHaveBeenCalled()
-    expect(warningMock).toHaveBeenNthCalledWith(
-      1,
-      'Failed to fetch collaborators: Insufficient permissions'
+    await runWithDependencies(coreApi, githubApi)
+
+    assert.strictEqual(coreApi.error.mock.callCount(), 0)
+    const warningMessages = coreApi.warning.mock.calls.map(
+      (call) => call.arguments[0]
     )
-    expect(warningMock).toHaveBeenNthCalledWith(
-      2,
+    assert.deepStrictEqual(warningMessages, [
+      'Failed to fetch collaborators: Insufficient permissions',
       'Found no eligible reviewers to add.'
-    )
+    ])
   })
 })
