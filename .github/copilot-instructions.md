@@ -20,8 +20,7 @@
 - **Build:** No explicit build step for the action logic (runs as-is in GitHub
   Actions). For local development, use TypeScript tooling as needed.
 - **Test:**
-  - Run all tests: `npx jest`
-  - Test config: see `jest.config.js` (uses `ts-jest`, ESM, coverage enabled)
+  - Run all tests: `node --test`
 - **Release:**
   - Use `script/release` for tagging and publishing. This script enforces
     versioning and tagging conventions for major/minor releases.

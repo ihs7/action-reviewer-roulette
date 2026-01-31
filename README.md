@@ -4,7 +4,6 @@
 ![CI](https://github.com/ihs7/action-reviewer-roulette/actions/workflows/ci.yml/badge.svg)
 [![Check dist/](https://github.com/ihs7/action-reviewer-roulette/actions/workflows/check-dist.yml/badge.svg)](https://github.com/ihs7/action-reviewer-roulette/actions/workflows/check-dist.yml)
 [![CodeQL](https://github.com/ihs7/action-reviewer-roulette/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/ihs7/action-reviewer-roulette/actions/workflows/codeql-analysis.yml)
-[![Coverage](./badges/coverage.svg)](./badges/coverage.svg)
 
 This GitHub Action automatically assigns a specified number of random reviewers
 to a pull request. It fetches events for the repository to identify active users
@@ -98,3 +97,11 @@ permissions:
 See
 [jobs.<job_id>.permissions](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idpermissions)
 for more information.
+
+## Development
+
+Run tests with Node's test runner:
+
+```bash
+node --test
+```
