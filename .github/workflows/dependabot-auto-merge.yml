@@ -1,0 +1,33 @@
+name: dependabot-auto-merge
+
+on:
+  workflow_run:
+    workflows:
+      - Continuous Integration
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  dependabot-auto-merge:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.pull_requests &&
+      github.event.workflow_run.pull_requests[0].number &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Approve and auto-merge Dependabot PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          echo "Approving Dependabot PR #${PR_NUMBER}"
+          gh pr review --repo "${{ github.repository }}" --approve "${PR_NUMBER}" || echo "Already approved"
+          echo "Merging Dependabot PR #${PR_NUMBER}"
+          gh pr merge --repo "${{ github.repository }}" --rebase "${PR_NUMBER}" || echo "Merge skipped (base changed or already merged)"
