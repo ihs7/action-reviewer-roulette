@@ -18,6 +18,7 @@ jobs:
       github.event.workflow_run.pull_requests[0].number &&
       github.event.workflow_run.actor.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
       pull-requests: write

@@ -24,6 +24,7 @@ jobs:
   check-dist:
     name: Check dist/
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
